@@ -1,0 +1,36 @@
+{
+  "name": "indranil-stn/workflow",
+  "type": "project",
+  "license": "MIT",
+  "description": "Simple State Machine Workflow",
+  "homepage": "http://softechnation.com",
+  "require": {
+      "php": ">=8.1"
+  },
+  "require-dev": {
+    "mockery/mockery": "^1.6",
+    "phpstan/phpstan": "^1.10",
+    "phpunit/phpunit": "^10.0",
+    "vimeo/psalm": "^5.0"
+  },
+  "autoload": {
+      "psr-4": {
+          "ID\\Workflow\\": "src"
+      }
+  },
+  "autoload-dev": {
+      "psr-4": {
+          "Tests\\": "tests"
+      }
+  },
+  "config": {
+      "sort-packages": true
+  },
+  "scripts": {
+      "test": "vendor/bin/phpunit",
+      "test-coverage": "vendor/bin/phpunit --coverage",
+      "psalm:config": "psalm"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
