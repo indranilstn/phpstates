@@ -15,12 +15,12 @@
   },
   "autoload": {
       "psr-4": {
-          "ID\\Workflow\\": "src"
+          "Stn\\Workflow\\": "src"
       }
   },
   "autoload-dev": {
       "psr-4": {
-          "Tests\\": "tests"
+          "Stn\\Tests\\": "tests"
       }
   },
   "config": {

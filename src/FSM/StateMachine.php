@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ID\Workflow\FSM;
+namespace Stn\Workflow\FSM;
 
-use ID\Workflow\State\StateInterface;
-use ID\Workflow\Context\ContextInterface;
-use ID\Workflow\State\FinalState;
+use Stn\Workflow\State\StateInterface;
+use Stn\Workflow\Context\ContextInterface;
+use Stn\Workflow\State\FinalState;
 
 class StateMachine implements StateMachineInterface
 {
@@ -50,6 +50,11 @@ class StateMachine implements StateMachineInterface
         return $this->currentState;
     }
 
+    public function getContext(): ContextInterface
+    {
+        return $this->context;
+    }
+
     public function register(string $id, \Closure $callable, mixed $payload = null): void
     {
         $this->consumers[$id] = [$callable, $payload];
@@ -62,7 +67,7 @@ class StateMachine implements StateMachineInterface
 
     public function start(...$args): bool
     {
-        $result = $this->states[$this->initialState]->enter($this, $this->context, ...$args);
+        $result = $this->states[$this->initialState]->enter(null, $this, ...$args);
         if ($result) {
             $this->currentState = $this->initialState;
 
@@ -86,12 +91,12 @@ class StateMachine implements StateMachineInterface
 
         if ($target && array_key_exists($target, $this->states)) {
             $targetState = $this->states[$target];
-            if ($targetState->enter($this, $this->context, ...$args)) {
+            if ($targetState->enter($event, $this, ...$args)) {
                 $this->currentState = $target;
                 if ($targetState instanceof FinalState) {
                     $this->isTerminated = true;
                 }
-                $state->leave($this, $this->context, ...$args);
+                $state->leave($this, ...$args);
 
                 foreach ($this->consumers as &$consumer) {
                     [$callback, $payload] = $consumer;

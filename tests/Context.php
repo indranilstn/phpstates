@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Tests;
+namespace Stn\Tests;
 
-use ID\Workflow\Context\BaseContext;
+use Stn\Workflow\Context\BaseContext;
 
 class Context extends BaseContext
 {

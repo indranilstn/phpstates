@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests;
+namespace Stn\Tests;
 
-use ID\Workflow\Action\BaseAction;
-use ID\Workflow\Context\ContextInterface;
-use ID\Workflow\FSM\StateMachineInterface;
+use Stn\Workflow\Action\BaseAction;
+use Stn\Workflow\Context\ContextInterface;
+use Stn\Workflow\FSM\StateMachineInterface;
 
 class Action extends BaseAction
 {

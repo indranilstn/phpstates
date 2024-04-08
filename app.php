@@ -1,8 +1,8 @@
 <?php
 
-use Tests\{Action, Context, State};
-use ID\Workflow\FSM\StateMachine;
-use ID\Workflow\State\FinalState;
+use Stn\Tests\{Action, Context, State};
+use Stn\Workflow\FSM\StateMachine;
+use Stn\Workflow\State\FinalState;
 
 include_once __DIR__ . '/vendor/autoload.php';
 

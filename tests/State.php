@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests;
+namespace Stn\Tests;
 
-use ID\Workflow\Context\ContextInterface;
-use ID\Workflow\State\BaseState;
+use Stn\Workflow\Context\ContextInterface;
+use Stn\Workflow\State\BaseState;
 
 class State extends BaseState
 {

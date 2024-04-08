@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ID\Workflow\Context;
+namespace Stn\Workflow\Context;
 
 interface ContextInterface
 {

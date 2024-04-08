@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ID\Workflow\State;
+namespace Stn\Workflow\State;
 
-use ID\Workflow\Action\BaseAction;
-use ID\Workflow\Context\ContextInterface;
+use Stn\Workflow\Action\BaseAction;
+use Stn\Workflow\Context\ContextInterface;
 
 class FinalState extends BaseState
 {

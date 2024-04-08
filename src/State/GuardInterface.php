@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ID\Workflow\State;
+namespace Stn\Workflow\State;
 
-use ID\Workflow\Context\ContextInterface;
+use Stn\Workflow\Context\ContextInterface;
 
 interface GuardInterface
 {

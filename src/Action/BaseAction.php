@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ID\Workflow\Action;
+namespace Stn\Workflow\Action;
 
-use ID\Workflow\Context\ContextInterface;
-use ID\Workflow\FSM\StateMachineInterface;
+use Stn\Workflow\Context\ContextInterface;
+use Stn\Workflow\FSM\StateMachineInterface;
 
 abstract class BaseAction
 {
