@@ -21,13 +21,13 @@ $fsm = new StateMachine(
             name: 'booked',
             entry: new Action(),
             events: [
-                'show' => 'showed',
+                'show' => 'shown',
                 'apply' => 'applied',
                 'lease' => 'leased',
             ],
         ),
         new State(
-            name: 'showed',
+            name: 'shown',
             events: [
                 'apply' => 'applied',
                 'lease' => 'leased',

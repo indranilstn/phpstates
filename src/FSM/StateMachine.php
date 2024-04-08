@@ -92,11 +92,14 @@ class StateMachine implements StateMachineInterface
         if ($target && array_key_exists($target, $this->states)) {
             $targetState = $this->states[$target];
             if ($targetState->enter($event, $this, ...$args)) {
-                $this->currentState = $target;
                 if ($targetState instanceof FinalState) {
                     $this->isTerminated = true;
                 }
-                $state->leave($this, ...$args);
+
+                if ($target != $this->currentState) {
+                    $this->currentState = $target;
+                    $state->leave($this, ...$args);
+                }
 
                 foreach ($this->consumers as &$consumer) {
                     [$callback, $payload] = $consumer;
