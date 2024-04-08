@@ -8,13 +8,13 @@ include_once __DIR__ . '/vendor/autoload.php';
 
 $fsm = new StateMachine(
     name: 'test-machine',
-    context: new Context(),
+    context: fn() => new Context(),
     states: [
         new State(
             name: 'initial',
             events: [
                 'book' => 'booked',
-                'show' => 'showed',
+                'show' => 'shown',
             ],
         ),
         new State(

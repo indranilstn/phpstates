@@ -6,24 +6,28 @@ namespace Stn\Workflow\FSM;
 
 use Stn\Workflow\State\StateInterface;
 use Stn\Workflow\Context\ContextInterface;
-use Stn\Workflow\State\FinalState;
 
-class StateMachine implements StateMachineInterface
+class StateMachine implements StateMachineInterface, StateInterface
 {
     private ?string $initialState = null;
     private ?string $currentState = null;
+
+    private bool $isStarted = false;
     private bool $isTerminated = false;
 
     /** @var array<string, StateInterface> $states */
     private array $states = [];
+
+    /** @var array<string, StateInterface> $events */
+    private array $events = [];
 
     /**
      * Throws \Exception on duplicate state name or non-existant starting state
      */
     public function __construct(
         private string $name,
-        private ContextInterface $context,
-        /** @var array<int, StateInterface> $states */
+        private ContextInterface|\Closure $context,
+        /** @var array<int, StateInterface|\Closure> $states */
         array $states,
         ?string $startState = null,
         /** @var array<string, \Closure> $consumers */
@@ -45,13 +49,110 @@ class StateMachine implements StateMachineInterface
         $this->initialState = $startState ?? array_key_first($this->states);
     }
 
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    public function getTarget(string $event): ?string
+    {
+        $result = null;
+
+        if (isset($this->events[$event])) {
+            $result = $this->name;
+        } else {
+            foreach ($this->states as $name => $_) {
+                $state = $this->getStateByName($name);
+                $target = $state->getTarget($event);
+                if ($target) {
+                    $this->events[$event] = $state;
+                    $result = $this->name;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    public function enter(?string $event, StateMachineInterface $fsm, ...$args): bool
+    {
+        $result = false;
+
+        if (!$this->isStarted) {
+            $result = $this->start(...$args);
+        }
+
+        if ($result && $event) {
+            $result = $this->trigger($event, ...$args);
+        }
+
+        return $result;
+    }
+
+    public function leave(StateMachineInterface $fsm, ...$args): void
+    {
+        $state = $this->getStateByName($this->currentState);
+        if ($state) {
+            $state->leave($this, ...$args);
+        }
+    }
+
+    public function isFinal(): bool
+    {
+        return $this->isTerminated;
+    }
+
+    /**
+     * Find target state object
+     *
+     * @param string $name state name
+     * @return StateInterface
+     * @throws \Exception on error
+     */
+    private function getStateByName(string $name): StateInterface
+    {
+        if (!($name && array_key_exists($name, $this->states))) {
+            throw new \Exception("Invalid state for $name");
+        }
+
+        $state = $this->states[$name];
+
+        if ($state instanceof \Closure) {
+            $stateObject = $state();
+
+            if (!($stateObject instanceof StateInterface)) {
+                throw new \Exception("Invalid state object for $name");
+            }
+
+            $state = $stateObject;
+            $this->states[$name] = $stateObject;
+        }
+
+        return $state;
+    }
+
     public function getState(): string
     {
         return $this->currentState;
     }
 
+    /**
+     * Get the context
+     *
+     * @return ContextInterface
+     * @throws \Exception
+     */
     public function getContext(): ContextInterface
     {
+        if ($this->context instanceof \Closure) {
+            $contextObject = ($this->context)();
+            if (!($contextObject instanceof ContextInterface)) {
+                throw new \Exception('Invalid context');
+            }
+
+            $this->context = $contextObject;
+        }
+
         return $this->context;
     }
 
@@ -67,8 +168,10 @@ class StateMachine implements StateMachineInterface
 
     public function start(...$args): bool
     {
-        $result = $this->states[$this->initialState]->enter(null, $this, ...$args);
+        $state = $this->getStateByName($this->initialState);
+        $result = $state->enter(null, $this, ...$args);
         if ($result) {
+            $this->isStarted = true;
             $this->currentState = $this->initialState;
 
             foreach ($this->consumers as &$consumer) {
@@ -82,32 +185,35 @@ class StateMachine implements StateMachineInterface
 
     public function trigger(string $event, ...$args): bool
     {
-        if ($this->isTerminated) {
+        if (!$this->isStarted || $this->isTerminated) {
             return false;
         }
 
-        $state = $this->states[$this->currentState];
+        $state = $this->getStateByName($this->currentState);
         $target = $state->getTarget($event);
 
-        if ($target && array_key_exists($target, $this->states)) {
-            $targetState = $this->states[$target];
-            if ($targetState->enter($event, $this, ...$args)) {
-                if ($targetState instanceof FinalState) {
-                    $this->isTerminated = true;
-                }
+        if (!$target) {
+            return false;
+        }
 
-                if ($target != $this->currentState) {
-                    $this->currentState = $target;
-                    $state->leave($this, ...$args);
-                }
+        $targetState = $this->getStateByName($target);
 
-                foreach ($this->consumers as &$consumer) {
-                    [$callback, $payload] = $consumer;
-                    $callback($this->currentState, $payload);
-                }
-
-                return true;
+        if ($targetState->enter($event, $this, ...$args)) {
+            if ($targetState->isFinal()) {
+                $this->isTerminated = true;
             }
+
+            if ($target != $this->currentState) {
+                $this->currentState = $target;
+                $state->leave($this, ...$args);
+            }
+
+            foreach ($this->consumers as &$consumer) {
+                [$callback, $payload] = $consumer;
+                $callback($this->currentState, $payload);
+            }
+
+            return true;
         }
 
         return false;

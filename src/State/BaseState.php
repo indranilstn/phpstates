@@ -55,4 +55,9 @@ abstract class BaseState implements StateInterface, GuardInterface
             $this->exit($fsm->getContext(), ...$args);
         }
     }
+
+    public function isFinal(): bool
+    {
+        return count($this->events) == 0;
+    }
 }
