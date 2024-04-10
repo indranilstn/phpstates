@@ -17,26 +17,44 @@ $fsm = new StateMachine(
                 'show' => 'shown',
             ],
         ),
-        new State(
+        fn() => new State(
             name: 'booked',
             entry: new Action(),
             events: [
                 'show' => 'shown',
-                'apply' => 'applied',
+                'apply' => 'nested/applied',
                 'lease' => 'leased',
             ],
         ),
         new State(
             name: 'shown',
             events: [
-                'apply' => 'applied',
+                'apply' => 'nested/applied',
                 'lease' => 'leased',
             ],
         ),
-        new State(
-            name: 'applied',
-            events: [
-                'lease' => 'leased',
+        new StateMachine(
+            name: 'nested',
+            context: new Context(),
+            states: [
+                new StateMachine(
+                    name: 'second-nested',
+                    context: new Context(),
+                    states: [
+                        new State(
+                            name: 'nested-state',
+                            events: [
+                                'test' => '/nested/applied',
+                            ],
+                        ),
+                    ],
+                ),
+                new State(
+                    name: 'applied',
+                    events: [
+                        'lease' => '/leased',
+                    ],
+                ),
             ],
         ),
         new FinalState(
@@ -46,7 +64,7 @@ $fsm = new StateMachine(
 );
 
 $fsm->register('test-consumer', function (string $state) {
-    echo "$state\n";
+    echo "Current state: $state\n";
 });
 $fsm->start();
 $fsm->trigger('show');

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Stn\Workflow\FSM;
 
+use Stn\Workflow\State\EventData;
 use Stn\Workflow\State\StateInterface;
 use Stn\Workflow\Context\ContextInterface;
 
 class StateMachine implements StateMachineInterface, StateInterface
 {
     private ?string $initialState = null;
-    private ?string $currentState = null;
+    private ?string $currentStateName = null;
+
+    private ?StateMachineInterface $root = null;
+    private ?StateInterface $current = null;
 
     private bool $isStarted = false;
     private bool $isTerminated = false;
@@ -26,14 +30,22 @@ class StateMachine implements StateMachineInterface, StateInterface
      */
     public function __construct(
         private string $name,
-        private ContextInterface|\Closure $context,
+        private ContextInterface|\Closure|null $context = null,
         /** @var array<int, StateInterface|\Closure> $states */
         array $states,
         ?string $startState = null,
         /** @var array<string, \Closure> $consumers */
         private array $consumers = [],
     ) {
-        foreach ($states as &$state) {
+        foreach ($states as $state) {
+            if ($state instanceof \Closure) {
+                $state = $state();
+
+                if (!($state instanceof StateInterface)) {
+                    throw new \Exception("Invalid closure provided for state in machine {$this->name}");
+                }
+            }
+
             $stateName = $state->getName();
             if (array_key_exists($stateName, $this->states)) {
                 throw new \Exception("Duplicate state name: $stateName");
@@ -47,6 +59,7 @@ class StateMachine implements StateMachineInterface, StateInterface
         }
 
         $this->initialState = $startState ?? array_key_first($this->states);
+        $this->root = $this;
     }
 
     public function getName(): string
@@ -58,42 +71,34 @@ class StateMachine implements StateMachineInterface, StateInterface
     {
         $result = null;
 
-        if (isset($this->events[$event])) {
-            $result = $this->name;
-        } else {
-            foreach ($this->states as $name => $_) {
-                $state = $this->getStateByName($name);
-                $target = $state->getTarget($event);
-                if ($target) {
-                    $this->events[$event] = $state;
-                    $result = $this->name;
-                }
-            }
+        if ($this->isStarted && $this->current) {
+            $result = $this->current->getTarget($event);
         }
 
         return $result;
     }
 
-    public function enter(?string $event, StateMachineInterface $fsm, ...$args): bool
+    public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): ?string
     {
-        $result = false;
+        $result = null;
 
         if (!$this->isStarted) {
-            $result = $this->start(...$args);
+            $this->root = $fsm->getRoot();
+            $this->register($fsm->getName(), $fsm->receiveSignal(...));
+            $result = $this->start(...$args) ? $this->currentStateName : null;
+
+            if (!$result) {
+                return null;
+            }
         }
 
-        if ($result && $event) {
-            $result = $this->trigger($event, ...$args);
-        }
-
-        return $result;
+        return $eventData ? $this->transition($eventData, ...$args) : $result;
     }
 
     public function leave(StateMachineInterface $fsm, ...$args): void
     {
-        $state = $this->getStateByName($this->currentState);
-        if ($state) {
-            $state->leave($this, ...$args);
+        if ($this->current) {
+            $this->current->leave($this, ...$args);
         }
     }
 
@@ -103,37 +108,74 @@ class StateMachine implements StateMachineInterface, StateInterface
     }
 
     /**
-     * Find target state object
+     * Find target state object based on state path
+     *   e.g., 'booked', 'some-nested/state'
      *
-     * @param string $name state name
-     * @return StateInterface
+     * @param string $name state name or path
+     * @return array{state: StateInterface, target: string}
      * @throws \Exception on error
      */
-    private function getStateByName(string $name): StateInterface
+    private function getStateByName(string $name): array
     {
-        if (!($name && array_key_exists($name, $this->states))) {
+        $stateName = $name;
+        $target = $name;
+
+        $stateParts = explode('/', $name);
+        if (count($stateParts) > 1) {
+            if ($stateParts[0]) {
+                if ($stateParts[0] == $this->name) {
+                    $stateName = $stateParts[1];
+                    $target = ltrim(ltrim($name, "{$this->name}"), '/');
+                } else {
+                    $stateName = $stateParts[0];
+                }
+            } else {
+                $rootTarget = ltrim($name, '/');
+
+                return ($this->root == $this)
+                    ? $this->getStateByName($rootTarget)
+                    : [
+                        'state' => $this->root,
+                        'target' => $rootTarget,
+                    ];
+            }
+        }
+
+        if (!array_key_exists($stateName, $this->states)) {
             throw new \Exception("Invalid state for $name");
         }
 
-        $state = $this->states[$name];
+        $state = $this->states[$stateName];
+        return [
+            'state' => $state,
+            'target' => $target,
+        ];
+    }
 
-        if ($state instanceof \Closure) {
-            $stateObject = $state();
+    public function getRoot(): StateMachineInterface
+    {
+        return $this->root;
+    }
 
-            if (!($stateObject instanceof StateInterface)) {
-                throw new \Exception("Invalid state object for $name");
-            }
-
-            $state = $stateObject;
-            $this->states[$name] = $stateObject;
+    public function signal(?string $state = null, mixed $signalLoad = null): void
+    {
+        foreach ($this->consumers as &$consumer) {
+            [$callback, $payload] = $consumer;
+            $callback(
+                $state ?? $this->currentStateName,
+                $signalLoad ?? $payload
+            );
         }
+    }
 
-        return $state;
+    protected function receiveSignal(string $state, mixed $payload = null): void
+    {
+        $this->currentStateName = "{$this->name}/$state";
     }
 
     public function getState(): string
     {
-        return $this->currentState;
+        return $this->currentStateName;
     }
 
     /**
@@ -168,50 +210,14 @@ class StateMachine implements StateMachineInterface, StateInterface
 
     public function start(...$args): bool
     {
-        $state = $this->getStateByName($this->initialState);
+        ['state' => $state] = $this->getStateByName($this->initialState);
         $result = $state->enter(null, $this, ...$args);
         if ($result) {
             $this->isStarted = true;
-            $this->currentState = $this->initialState;
+            $this->currentStateName = "{$this->name}/$result";
+            $this->current = $state;
 
-            foreach ($this->consumers as &$consumer) {
-                [$callback, $payload] = $consumer;
-                $callback($this->currentState, $payload);
-            }
-        }
-
-        return $result;
-    }
-
-    public function trigger(string $event, ...$args): bool
-    {
-        if (!$this->isStarted || $this->isTerminated) {
-            return false;
-        }
-
-        $state = $this->getStateByName($this->currentState);
-        $target = $state->getTarget($event);
-
-        if (!$target) {
-            return false;
-        }
-
-        $targetState = $this->getStateByName($target);
-
-        if ($targetState->enter($event, $this, ...$args)) {
-            if ($targetState->isFinal()) {
-                $this->isTerminated = true;
-            }
-
-            if ($target != $this->currentState) {
-                $this->currentState = $target;
-                $state->leave($this, ...$args);
-            }
-
-            foreach ($this->consumers as &$consumer) {
-                [$callback, $payload] = $consumer;
-                $callback($this->currentState, $payload);
-            }
+            $this->signal();
 
             return true;
         }
@@ -219,9 +225,59 @@ class StateMachine implements StateMachineInterface, StateInterface
         return false;
     }
 
-    public function hasTerminated(): bool
+    private function transition(EventData $eventData, ...$args): ?string
     {
-        return $this->isTerminated;
+        [
+            'state' => $targetState,
+            'target' => $nextTarget,
+        ] = $this->getStateByName($eventData->target);
+
+        $stateName = $targetState->enter(
+            new EventData($eventData->event, $nextTarget),
+            $this,
+            ...$args
+        );
+
+        if ($stateName) {
+            if ($stateName != $this->currentStateName) {
+                $this->currentStateName = "{$this->name}/$stateName";
+
+                if ($this->current) {
+                    $this->current->leave($this, ...$args);
+                }
+                $this->current = $targetState;
+            }
+
+            $this->signal();
+
+            if ($targetState->isFinal()) {
+                $this->isTerminated = true;
+
+                if ($targetState instanceof StateMachineInterface) {
+                    $targetState->unregister($this->getName());
+                }
+            }
+
+            return $this->currentStateName;
+        }
+
+        return null;
+    }
+
+    public function trigger(string $event, ...$args): bool
+    {
+        if (!($this->isStarted && $this->current) || $this->isTerminated) {
+            return false;
+        }
+
+        $target = $this->current->getTarget($event);
+        if (!$target) {
+            return false;
+        }
+
+        $result = $this->transition(new EventData($event, $target), ...$args);
+
+        return (bool) $result;
     }
 
     public function persist(\Closure $handler): mixed

@@ -11,7 +11,7 @@ interface StateInterface
 {
     public function getName(): string;
     public function getTarget(string $event): ?string;
-    public function enter(?string $event, StateMachineInterface $fsm, ...$args): bool;
+    public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): ?string;
     public function leave(StateMachineInterface $fsm, ...$args): void;
     public function isFinal(): bool;
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stn\Workflow\State;
 
+use Stn\Workflow\State\EventData;
 use Stn\Workflow\Context\ContextInterface;
 use Stn\Workflow\FSM\StateMachineInterface;
 use Stn\Workflow\Action\BaseAction;
@@ -35,7 +36,7 @@ abstract class BaseState implements StateInterface, GuardInterface
         return array_key_exists($event, $this->events) ? $this->events[$event] : null;
     }
 
-    public function enter(?string $event, StateMachineInterface $fsm, ...$args): bool
+    public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): ?string
     {
         $context = $fsm->getContext();
         if ($this->canTransition($context, ...$args)) {
@@ -43,10 +44,10 @@ abstract class BaseState implements StateInterface, GuardInterface
                 $this->entry($context, ...$args);
             }
 
-            return true;
+            return $this->name;
         }
 
-        return false;
+        return null;
     }
 
     public function leave(StateMachineInterface $fsm, ...$args): void
