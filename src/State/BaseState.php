@@ -17,6 +17,7 @@ abstract class BaseState implements StateInterface, GuardInterface
         protected ?BaseAction $exit = null,
         /** @var array<string, string> $events */
         protected array $events = [],
+        protected ?string $target = null,
     ) {
 
     }
@@ -36,7 +37,7 @@ abstract class BaseState implements StateInterface, GuardInterface
         return array_key_exists($event, $this->events) ? $this->events[$event] : null;
     }
 
-    public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): ?string
+    public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): string|array|null
     {
         $context = $fsm->getContext();
         if ($this->canTransition($context, ...$args)) {
@@ -44,7 +45,11 @@ abstract class BaseState implements StateInterface, GuardInterface
                 $this->entry($context, ...$args);
             }
 
-            return $this->name;
+            return $this->target
+                ? [
+                    'state' => $this->name,
+                    'target' => $this->target
+                ] : $this->name;
         }
 
         return null;
@@ -59,6 +64,6 @@ abstract class BaseState implements StateInterface, GuardInterface
 
     public function isFinal(): bool
     {
-        return count($this->events) == 0;
+        return !$this->target && count($this->events) == 0;
     }
 }

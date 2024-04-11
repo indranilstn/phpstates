@@ -92,7 +92,11 @@ class StateMachine implements StateMachineInterface, StateInterface
             }
         }
 
-        return $eventData ? $this->transition($eventData, ...$args) : $result;
+        if ($eventData) {
+            $result = $this->transition($eventData, ...$args);
+        }
+
+        return $result;
     }
 
     public function leave(StateMachineInterface $fsm, ...$args): void
@@ -208,18 +212,43 @@ class StateMachine implements StateMachineInterface, StateInterface
         unset($this->consumers[$id]);
     }
 
+    private function cleanup($state): void
+    {
+        if ($state->isFinal()) {
+            $this->isTerminated = true;
+
+            if ($state instanceof StateMachineInterface) {
+                $state->unregister($this->name);
+            }
+        }
+    }
+
     public function start(...$args): bool
     {
         ['state' => $state] = $this->getStateByName($this->initialState);
         $result = $state->enter(null, $this, ...$args);
         if ($result) {
             $this->isStarted = true;
-            $this->currentStateName = "{$this->name}/$result";
+
+            [
+                'state' => $stateName,
+                'target' => $target
+            ] = is_array($result) ? $result : ['state' => $result, 'target' => null];
+
+            $this->currentStateName = "{$this->name}/$stateName";
             $this->current = $state;
 
             $this->signal();
 
-            return true;
+            $retval = true;
+            if ($target) {
+                $state->leave($this, ...$args);
+                $retval = $this->transition(new EventData(null, $target), ...$args);
+            }
+
+            $this->cleanup($state);
+
+            return $retval;
         }
 
         return false;
@@ -232,13 +261,18 @@ class StateMachine implements StateMachineInterface, StateInterface
             'target' => $nextTarget,
         ] = $this->getStateByName($eventData->target);
 
-        $stateName = $targetState->enter(
+        $result = $targetState->enter(
             new EventData($eventData->event, $nextTarget),
             $this,
             ...$args
         );
 
-        if ($stateName) {
+        if ($result) {
+            [
+                'state' => $stateName,
+                'target' => $target
+            ] = is_array($result) ? $result : ['state' => $result, 'target' => null];
+
             if ($stateName != $this->currentStateName) {
                 $this->currentStateName = "{$this->name}/$stateName";
 
@@ -250,15 +284,15 @@ class StateMachine implements StateMachineInterface, StateInterface
 
             $this->signal();
 
-            if ($targetState->isFinal()) {
-                $this->isTerminated = true;
-
-                if ($targetState instanceof StateMachineInterface) {
-                    $targetState->unregister($this->getName());
-                }
+            $retval = $this->currentStateName;
+            if ($target) {
+                $targetState->leave($this, ...$args);
+                $retval = $this->transition(new EventData(null, $target), ...$args);
             }
 
-            return $this->currentStateName;
+            $this->cleanup($targetState);
+
+            return $retval;
         }
 
         return null;

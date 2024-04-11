@@ -13,6 +13,7 @@ $fsm = new StateMachine(
         new State(
             name: 'initial',
             events: [
+                'reset' => 'initial',
                 'book' => 'booked',
                 'show' => 'shown',
             ],
@@ -24,6 +25,7 @@ $fsm = new StateMachine(
                 'show' => 'shown',
                 'apply' => 'nested/applied',
                 'lease' => 'leased',
+                'close' => 'closed',
             ],
         ),
         new State(
@@ -31,6 +33,7 @@ $fsm = new StateMachine(
             events: [
                 'apply' => 'nested/applied',
                 'lease' => 'leased',
+                'close' => 'closed',
             ],
         ),
         new StateMachine(
@@ -57,8 +60,12 @@ $fsm = new StateMachine(
                 ),
             ],
         ),
+        new State(
+            name: 'leased',
+            target: 'closed',
+        ),
         new FinalState(
-            name: 'leased'
+            name: 'closed'
         )
     ],
 );
@@ -67,6 +74,7 @@ $fsm->register('test-consumer', function (string $state) {
     echo "Current state: $state\n";
 });
 $fsm->start();
+$fsm->trigger('initial');
 $fsm->trigger('show');
 $fsm->trigger('book');
 $fsm->trigger('apply');

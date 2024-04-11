@@ -7,7 +7,7 @@ namespace Stn\Workflow\State;
 class EventData
 {
     public function __construct(
-        public string $event,
+        public ?string $event,
         public string $target,
     ) {
 
