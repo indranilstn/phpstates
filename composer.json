@@ -1,11 +1,11 @@
 {
-  "name": "indranil-stn/workflow",
+  "name": "indranilstn/phpstates",
   "type": "project",
   "license": "MIT",
   "description": "Simple State Machine Workflow",
   "homepage": "http://softechnation.com",
   "require": {
-      "php": ">=8.1"
+      "php": ">=8.3"
   },
   "require-dev": {
     "mockery/mockery": "^1.6",
