@@ -8,7 +8,7 @@ class EventData
 {
     public function __construct(
         public ?string $event,
-        public string $target,
+        public ?string $target,
     ) {
 
     }

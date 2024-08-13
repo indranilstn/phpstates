@@ -13,6 +13,7 @@ abstract class BaseContext implements ContextInterface
         $reflector = new \ReflectionClass(static::class);
         $properties = $reflector->getProperties();
         foreach ($properties as $property) {
+            // Set dummy data for each property name
             $this->properties[$property->name] = $property->class;
         }
     }
@@ -28,7 +29,7 @@ abstract class BaseContext implements ContextInterface
     final public function set(string $name, mixed $data): void
     {
         if (array_key_exists($name, $this->properties)) {
-            // audit trail current value
+            // TODO: audit trail current value
             $this->{$name} = $data;
         } else {
             throw new \Exception('Trying to set invalid property');
@@ -40,5 +41,10 @@ abstract class BaseContext implements ContextInterface
         foreach ($data as $key => $value) {
             $this->set($key, $value);
         }
+    }
+
+    final public function get(string $name, mixed $default = null): mixed
+    {
+        return $this->{$name} ?? $default;
     }
 }

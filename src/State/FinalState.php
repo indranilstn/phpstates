@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stn\Workflow\State;
 
 use Stn\Workflow\Action\BaseAction;
-use Stn\Workflow\Context\ContextInterface;
+use Stn\Workflow\FSM\StateMachineInterface;
 
 class FinalState extends BaseState
 {
@@ -21,7 +21,7 @@ class FinalState extends BaseState
         return null;
     }
 
-    public function canTransition(ContextInterface $context, ...$args): bool
+    public function canTransition(StateMachineInterface $fsm, ...$args): bool
     {
         return true;
     }

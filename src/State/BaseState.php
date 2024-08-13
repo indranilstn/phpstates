@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stn\Workflow\State;
 
 use Stn\Workflow\State\EventData;
-use Stn\Workflow\Context\ContextInterface;
 use Stn\Workflow\FSM\StateMachineInterface;
 use Stn\Workflow\Action\BaseAction;
 
@@ -19,7 +18,6 @@ abstract class BaseState implements StateInterface, GuardInterface
         protected array $events = [],
         protected ?string $target = null,
     ) {
-
     }
 
     public function getName(): string
@@ -39,10 +37,9 @@ abstract class BaseState implements StateInterface, GuardInterface
 
     public function enter(?EventData $eventData, StateMachineInterface $fsm, ...$args): string|array|null
     {
-        $context = $fsm->getContext();
-        if ($this->canTransition($context, ...$args)) {
+        if ($this->canTransition($fsm, ...$args)) {
             if ($this->entry) {
-                $this->entry($context, ...$args);
+                $this->entry($fsm, ...$args);
             }
 
             return $this->target
@@ -58,7 +55,7 @@ abstract class BaseState implements StateInterface, GuardInterface
     public function leave(StateMachineInterface $fsm, ...$args): void
     {
         if ($this->exit) {
-            $this->exit($fsm->getContext(), ...$args);
+            $this->exit($fsm, ...$args);
         }
     }
 

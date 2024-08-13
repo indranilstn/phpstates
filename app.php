@@ -45,9 +45,15 @@ $fsm = new StateMachine(
                     context: new Context(),
                     states: [
                         new State(
+                            name: 'initial',
+                            events: [
+                                'test' => '/test-machine/nested/applied',
+                            ],
+                        ),
+                        new State(
                             name: 'nested-state',
                             events: [
-                                'test' => '/nested/applied',
+                                'test' => '/test-machine/nested/applied',
                             ],
                         ),
                     ],

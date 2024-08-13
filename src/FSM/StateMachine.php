@@ -19,11 +19,8 @@ class StateMachine implements StateMachineInterface, StateInterface
     private bool $isStarted = false;
     private bool $isTerminated = false;
 
-    /** @var array<string, StateInterface> $states */
+    /** @var array<string, StateInterface> */
     private array $states = [];
-
-    /** @var array<string, StateInterface> $events */
-    private array $events = [];
 
     /**
      * Throws \Exception on duplicate state name or non-existant starting state
@@ -31,9 +28,11 @@ class StateMachine implements StateMachineInterface, StateInterface
     public function __construct(
         private string $name,
         private ContextInterface|\Closure|null $context = null,
+
         /** @var array<int, StateInterface|\Closure> $states */
         array $states,
         ?string $startState = null,
+
         /** @var array<string, \Closure> $consumers */
         private array $consumers = [],
     ) {
@@ -51,15 +50,43 @@ class StateMachine implements StateMachineInterface, StateInterface
                 throw new \Exception("Duplicate state name: $stateName");
             }
 
+            if ($state instanceof StateMachineInterface) {
+                $state->setRoot($this);
+            }
+
             $this->states[$stateName] = $state;
         }
 
-        if ($startState && !array_key_exists($startState, $this->states)) {
-            throw new \Exception("Starting state name mismatch: $startState");
+        if ($startState) {
+            if (!array_key_exists($state, $this->states)) {
+                throw new \Exception("Starting state does not exist: $startState");
+            }
+
+            $this->initialState = $startState;
+        } else {
+            $firstState = array_key_first($this->states);
+            if ($firstState && !($firstState instanceof StateMachineInterface)) {
+                $this->initialState = $firstState;
+            }
         }
 
-        $this->initialState = $startState ?? array_key_first($this->states);
         $this->root = $this;
+    }
+
+    public function getRootZero(): StateMachineInterface
+    {
+        static $root = ($this->root == $this) ? $this : $this->root->getRoot();
+        return $root;
+    }
+
+    public function setRoot(StateMachineInterface $root): void
+    {
+        $this->root = $root;
+    }
+
+    public function getRoot(): StateMachineInterface
+    {
+        return $this->root;
     }
 
     public function getName(): string
@@ -83,7 +110,6 @@ class StateMachine implements StateMachineInterface, StateInterface
         $result = null;
 
         if (!$this->isStarted) {
-            $this->root = $fsm->getRoot();
             $this->register($fsm->getName(), $fsm->receiveSignal(...));
             $result = $this->start(...$args) ? $this->currentStateName : null;
 
@@ -92,7 +118,7 @@ class StateMachine implements StateMachineInterface, StateInterface
             }
         }
 
-        if ($eventData) {
+        if ($eventData?->target) {
             $result = $this->transition($eventData, ...$args);
         }
 
@@ -117,31 +143,34 @@ class StateMachine implements StateMachineInterface, StateInterface
      *
      * @param string $name state name or path
      * @return array{state: StateInterface, target: string}
-     * @throws \Exception on error
+     * @throws Exception on error
      */
     private function getStateByName(string $name): array
     {
         $stateName = $name;
-        $target = $name;
+        $target = null;
 
         $stateParts = explode('/', $name);
         if (count($stateParts) > 1) {
             if ($stateParts[0]) {
                 if ($stateParts[0] == $this->name) {
                     $stateName = $stateParts[1];
-                    $target = ltrim(ltrim($name, "{$this->name}"), '/');
+                    $target = ltrim($name, "{$this->name}/");
                 } else {
                     $stateName = $stateParts[0];
+                    $target = ltrim($name, "{$stateName}/");
                 }
             } else {
                 $rootTarget = ltrim($name, '/');
 
-                return ($this->root == $this)
+                $result = ($this->root == $this)
                     ? $this->getStateByName($rootTarget)
                     : [
-                        'state' => $this->root,
+                        'state' => $this->getRootZero(),
                         'target' => $rootTarget,
                     ];
+
+                return $result;
             }
         }
 
@@ -154,11 +183,6 @@ class StateMachine implements StateMachineInterface, StateInterface
             'state' => $state,
             'target' => $target,
         ];
-    }
-
-    public function getRoot(): StateMachineInterface
-    {
-        return $this->root;
     }
 
     public function signal(?string $state = null, mixed $signalLoad = null): void
@@ -185,21 +209,26 @@ class StateMachine implements StateMachineInterface, StateInterface
     /**
      * Get the context
      *
-     * @return ContextInterface
+     * @return ContextInterface|null
      * @throws \Exception
      */
-    public function getContext(): ContextInterface
+    public function getContext(): ?ContextInterface
     {
-        if ($this->context instanceof \Closure) {
-            $contextObject = ($this->context)();
-            if (!($contextObject instanceof ContextInterface)) {
-                throw new \Exception('Invalid context');
+        if ($this->context) {
+            if ($this->context instanceof \Closure) {
+                $contextObject = ($this->context)();
+                if (!($contextObject instanceof ContextInterface)) {
+                    throw new \Exception('Invalid context');
+                }
+
+                $this->context = $contextObject;
             }
 
-            $this->context = $contextObject;
+            return $this->context;
         }
 
-        return $this->context;
+        $root = $this->getRootZero();
+        return $root == $this ? null : $root->getContext();
     }
 
     public function register(string $id, \Closure $callable, mixed $payload = null): void
@@ -225,33 +254,23 @@ class StateMachine implements StateMachineInterface, StateInterface
 
     public function start(...$args): bool
     {
-        ['state' => $state] = $this->getStateByName($this->initialState);
-        $result = $state->enter(null, $this, ...$args);
-        if ($result) {
-            $this->isStarted = true;
-
-            [
-                'state' => $stateName,
-                'target' => $target
-            ] = is_array($result) ? $result : ['state' => $result, 'target' => null];
-
-            $this->currentStateName = "{$this->name}/$stateName";
-            $this->current = $state;
-
-            $this->signal();
-
-            $retval = true;
-            if ($target) {
-                $state->leave($this, ...$args);
-                $retval = $this->transition(new EventData(null, $target), ...$args);
+        if (!$this->initialState) {
+            if ($this == $this->getRootZero()) {
+                throw new \Exception('Initial state is mandatory for root state machine');
             }
 
-            $this->cleanup($state);
-
-            return $retval;
+            $this->isStarted = true;
+            return true;
         }
 
-        return false;
+        $this->isStarted = true;
+        $result = $this->transition(new EventData(null, $this->initialState), ...$args);
+
+        if (!$result) {
+            $this->isStarted = false;
+        }
+
+        return $this->isStarted;
     }
 
     private function transition(EventData $eventData, ...$args): ?string
@@ -270,7 +289,7 @@ class StateMachine implements StateMachineInterface, StateInterface
         if ($result) {
             [
                 'state' => $stateName,
-                'target' => $target
+                'target' => $newtarget
             ] = is_array($result) ? $result : ['state' => $result, 'target' => null];
 
             if ($stateName != $this->currentStateName) {
@@ -285,9 +304,9 @@ class StateMachine implements StateMachineInterface, StateInterface
             $this->signal();
 
             $retval = $this->currentStateName;
-            if ($target) {
+            if ($newtarget) {
                 $targetState->leave($this, ...$args);
-                $retval = $this->transition(new EventData(null, $target), ...$args);
+                $retval = $this->transition(new EventData(null, $newtarget), ...$args);
             }
 
             $this->cleanup($targetState);

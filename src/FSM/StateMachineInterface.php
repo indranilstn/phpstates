@@ -12,7 +12,7 @@ interface StateMachineInterface
     public function trigger(string $event, ...$args): bool;
     public function getName(): string;
     public function getState(): string;
-    public function getContext(): ContextInterface;
+    public function getContext(): ?ContextInterface;
     public function isFinal(): bool;
     public function register(string $id, \Closure $callable, mixed $payload = null): void;
     public function unregister(string $id): void;
