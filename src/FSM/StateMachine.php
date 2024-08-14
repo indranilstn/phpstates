@@ -227,8 +227,12 @@ class StateMachine implements StateMachineInterface, StateInterface
             return $this->context;
         }
 
-        $root = $this->getRootZero();
-        return $root == $this ? null : $root->getContext();
+        return $this->root == $this ? null : $this->root->getContext();
+    }
+
+    public function setContext(ContextInterface $context): void
+    {
+        $this->context = $context;
     }
 
     public function register(string $id, \Closure $callable, mixed $payload = null): void
